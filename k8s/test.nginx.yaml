@@ -1,0 +1,15 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: demo-nginx-test
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 30
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: demo-nginx-test
+          image: freeyeti/geoserver-tools:__IMAGE_TAG__
+          imagePullPolicy: Always
+          command: ["nginx", "-t"]

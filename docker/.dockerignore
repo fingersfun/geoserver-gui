@@ -1,0 +1,9 @@
+code-server
+docker
+k8s
+.venv
+assets
+files
+.git
+README.md
+.editorconfig

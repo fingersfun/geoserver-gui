@@ -1,0 +1,11 @@
+version: "3.5"
+
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - path_prefix=
+        - geoserver=
+    image: freeyeti/geoserver-tools:__IMAGE_TAG__

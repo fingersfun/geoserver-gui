@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gstools-frontend
+spec:
+  selector:
+    matchLabels:
+      app: gstools-frontend
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        app: gstools-frontend
+    spec:
+      containers:
+        - name: gstools-frontend
+          image: freeyeti/geoserver-tools:__IMAGE_TAG__
+          imagePullPolicy: Always
+          command: ["nginx", "-g", "daemon off;"]
+          ports:
+            - containerPort: 80
+          resources:
+            limits:
+              memory: 128Mi
+              cpu: "0.1"
+

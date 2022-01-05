@@ -1,0 +1,23 @@
+# initialization:
+#
+#  kubectl apply -f clusterissuer.yaml
+#  kubectl apply -f certificate.yaml
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: gstools-tls
+  namespace: default
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - kind: Rule
+      match: Host(`gst.freeyeti.net`)
+      priority: 9
+      services:
+        - name: gstools-frontend
+          port: 80
+  tls:
+    secretName: gstools-issuer-key
+

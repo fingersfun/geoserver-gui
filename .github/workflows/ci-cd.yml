@@ -1,0 +1,173 @@
+name: CI-CD
+
+on:
+  release:
+    types: [published]
+
+env:
+  # Define image
+  IMAGE_NAME: freeyeti/geoserver-tools
+
+jobs:
+  # Apply configmap to Kubernetes
+  config:
+    runs-on: gst-yeti2
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Set output
+        id: vars
+        run: echo ::set-output name=tag::${GITHUB_REF#refs/*/}
+
+      - name: Check output
+        run: |
+          echo ${{ steps.vars.outputs.tag }}
+          echo ${{ steps.vars.outputs.tag }} > version.txt
+
+      - name: Upload version file
+        uses: actions/upload-artifact@v2
+        with:
+          name: deployment
+          path: version.txt
+
+  # Build and push image to Docker registry.
+  build:
+    # Ensure config job passes before building image.
+    needs: config
+
+    runs-on: gst-yeti2
+
+    steps:
+      - name: Download version.txt
+        uses: actions/download-artifact@v2
+        with:
+          name: deployment
+  
+      - name: Set image version
+        id: vars
+        run: echo ::set-output name=tag::$(cat version.txt)
+        
+      - uses: actions/checkout@v2
+        env:
+          IMAGE_TAG: ${{ steps.vars.outputs.tag }}
+          
+      - name: Check image version
+        env:
+          IMAGE_TAG: ${{ steps.vars.outputs.tag }}
+        run: |
+          echo $IMAGE_TAG
+
+      - name: Copy docker files
+        run: |
+          cp -r docker/* ./
+          
+      - name: Build image
+        env:
+          IMAGE_TAG: ${{ steps.vars.outputs.tag }}
+        run: |
+          sed -i "s@__IMAGE_TAG__@$IMAGE_TAG@g" docker-compose.yaml
+          docker-compose -f docker-compose.yaml build
+
+      - name: Push image
+        env:
+          IMAGE_TAG: ${{ steps.vars.outputs.tag }}
+        run: |
+          docker push $IMAGE_NAME:$IMAGE_TAG
+          docker tag $IMAGE_NAME:latest
+          docker push $IMAGE_NAME:latest
+          
+      - name: Upload docker-compose.yaml
+        uses: actions/upload-artifact@v2
+        with:
+          name: deployment
+          path: docker-compose.yaml
+
+  # Test Nginx configuration.
+  test:
+    needs: build
+
+    runs-on: gst-yeti2
+
+    steps:
+      - name: Download version.txt
+        uses: actions/download-artifact@v2
+        with:
+          name: deployment
+  
+      - name: Set image version
+        id: vars
+        run: echo ::set-output name=tag::$(cat version.txt)
+        
+      - uses: actions/checkout@v2
+        env:
+          IMAGE_TAG: ${{ steps.vars.outputs.tag }}
+          
+      - name: Check image version
+        env:
+          IMAGE_TAG: ${{ steps.vars.outputs.tag }}
+        run: |
+          echo $IMAGE_TAG
+
+      - name: Run testing
+        env:
+          IMAGE_TAG: ${{ steps.vars.outputs.tag }}
+        run: |
+          sed -i "s@__IMAGE_TAG__@$IMAGE_TAG@g" k8s/test.nginx.yaml
+          kubectl delete -f k8s/test.nginx.yaml || echo "Nginx testing job is not exists"
+          kubectl apply -f k8s/test.nginx.yaml
+          kubectl wait --timeout=300s --for=condition=complete jobs/demo-nginx-test
+          kubectl logs -f jobs/demo-nginx-test
+          kubectl delete -f k8s/test.nginx.yaml
+        
+      - name: Upload k8s/test.nginx.yaml
+        uses: actions/upload-artifact@v2
+        with:
+          name: deployment
+          path: k8s/test.nginx.yaml
+
+  # Deploy to k8s
+  deploy:
+    # Ensure database already migrated
+    needs: test
+
+    runs-on: gst-yeti2
+
+    steps:
+      - name: Download version.txt
+        uses: actions/download-artifact@v2
+        with:
+          name: deployment
+  
+      - name: Set image version
+        id: vars
+        run: echo ::set-output name=tag::$(cat version.txt)
+        
+      - uses: actions/checkout@v2
+        env:
+          IMAGE_TAG: ${{ steps.vars.outputs.tag }}
+          
+      - name: Check image version
+        env:
+          IMAGE_TAG: ${{ steps.vars.outputs.tag }}
+        run: |
+          echo $IMAGE_TAG
+
+      - name: Apply k8s YAML files
+        env:
+          IMAGE_TAG: ${{ steps.vars.outputs.tag }}
+        run: |
+          sed -i "s@__IMAGE_TAG__@$IMAGE_TAG@g" k8s/deployment.yaml
+          kubectl apply -f k8s/deployment.yaml
+          kubectl apply -f k8s/service.yaml
+
+      - name: Upload kubernetes config
+        uses: actions/upload-artifact@v2
+        with:
+          name: deployment
+          path: |
+            k8s/deployment.yaml
+            k8s/clusterissuer.yaml
+            k8s/certificate.yaml
+            k8s/service.yaml
+            k8s/ingressroute.yaml

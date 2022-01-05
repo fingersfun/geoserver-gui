@@ -1,0 +1,10 @@
+version: "3.5"
+
+services:
+  frontend:
+    image: freeyeti/dev-in-docker:node-12-yarn-2
+    env_file: ../.env
+    ports:
+      - "0.0.0.0:9000:9000"
+    volumes:
+      - ../:/code
